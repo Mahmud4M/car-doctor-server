@@ -34,6 +34,7 @@ async function run() {
 
         // Service Collection
         const servicesCollection = client.db('carDoctor').collection('services');
+        const bookingCollection = client.db('carDoctor').collection('bookings');
 
         // Data for Services Direct in Database (Find Multiply)
         app.get('/services', async (req, res) => {
@@ -51,17 +52,22 @@ async function run() {
             const options = {
                 // Include only the `title` and `imdb` fields in the returned document
                 projection: {
+                    service_id: 1,
                     title: 1,
                     price: 1,
-                    service_id: 1
+                    
                 },
             };
             const result = await servicesCollection.findOne(query, options);
             res.send(result)
         })
 
-
-
+        // Get booking data
+        app.post('/bookings', async (req, res) => {
+            const booking = req.body;
+            const result = await bookingCollection.insertOne(booking);
+            res.send(result)
+        })
 
 
 
