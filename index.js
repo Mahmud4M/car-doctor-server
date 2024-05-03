@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const {
     MongoClient,
     ServerApiVersion,
@@ -36,6 +37,22 @@ async function run() {
         const servicesCollection = client.db('carDoctor').collection('services');
         const bookingCollection = client.db('carDoctor').collection('bookings');
 
+        // Auth related Api
+        app.post('/jwt', async (req, res) => {
+            const user = req.body;
+            console.log(user)
+            const token = jwt.sign(user, process.env.DB_ACCESS_TOKEN, {expiresIn: '1h'} )
+            res
+            .cookie('token', token, {
+                httpOnly: true,
+                secure: false, //http://localhost:5173/login
+                sameSite: 'none'
+            })
+            .send({success: true})
+        })
+
+
+        // Service Related Api
         // Data for Services Direct in Database (Find Multiply)
         app.get('/services', async (req, res) => {
             const cursor = servicesCollection.find()
@@ -96,7 +113,6 @@ async function run() {
             const id = req.params.id;
             const filter = {_id: new ObjectId(id)}
             const updatedBooking = req.body;
-            console.log(updatedBooking)
             const updateDoc = {
                 $set: {
                     status: updatedBooking.status
