@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const {
     MongoClient,
     ServerApiVersion,
@@ -12,8 +13,14 @@ require('dotenv').config();
 const port = process.env.PORT || 5000;
 
 // MiddleWare
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:5173'],
+    credentials: true
+}
+));
+
 app.use(express.json());
+app.use(cookieParser());
 
 
 
@@ -28,6 +35,30 @@ const client = new MongoClient(uri, {
     }
 });
 
+// Middlewares
+const looger = async (req, res, next) => {
+    console.log('called', req.hostname, req.originalUrl);
+    next();
+}
+
+const verifyToken = async (req, res, next) => {
+    const token = req.cookies.token;
+    console.log('token in verify', token)
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if(err) {
+            console.log(err)
+            res.status(401).send({messege: 'Not authorize'})
+        }
+        console.log('Hoisee', decoded);
+        req.user = decoded;
+        next();
+    })
+    
+} 
+
+
+
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -38,15 +69,17 @@ async function run() {
         const bookingCollection = client.db('carDoctor').collection('bookings');
 
         // Auth related Api
-        app.post('/jwt', async (req, res) => {
+        app.post('/jwt', looger,  async (req, res) => {
             const user = req.body;
             console.log(user)
-            const token = jwt.sign(user, process.env.DB_ACCESS_TOKEN, {expiresIn: '1h'} )
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'} )
+
             res
-            .cookie('token', token, {
+            res.cookie('token', token, {
                 httpOnly: true,
-                secure: false, //http://localhost:5173/login
-                sameSite: 'none'
+                secure: process.env.NODE_ENV === 'production', 
+                sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+
             })
             .send({success: true})
         })
@@ -54,7 +87,7 @@ async function run() {
 
         // Service Related Api
         // Data for Services Direct in Database (Find Multiply)
-        app.get('/services', async (req, res) => {
+        app.get('/services', looger,  async (req, res) => {
             const cursor = servicesCollection.find()
             const result = await cursor.toArray()
             res.send(result)
@@ -82,7 +115,14 @@ async function run() {
         })
 
         // Get booking data
-        app.get('/bookings', async (req, res) => {
+        app.get('/bookings', looger, verifyToken, async (req, res) => {
+            // console.log('In MyList token is', req.cookies.token)
+            console.log('Value in varify', req.user);
+
+            if(req.query.email !== req.user.email) {
+                return res.status(403).send({messege: 'forbidden Access'})
+            }
+
             let = query = {};
             if (req.query?.email) {
                 query = {
