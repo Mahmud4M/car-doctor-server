@@ -14,11 +14,13 @@ const port = process.env.PORT || 5000;
 
 // MiddleWare
 app.use(cors({
-    origin: ['http://localhost:5173'],
+    origin: [
+        'http://localhost:5173',
+        'https://car-doctor-client-77eb9.web.app',
+        'https://car-doctor-client-77eb9.firebaseapp.com'
+    ],
     credentials: true
-}
-));
-
+}));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -35,59 +37,68 @@ const client = new MongoClient(uri, {
     }
 });
 
+
 // Middlewares
-const looger = async (req, res, next) => {
-    console.log('called', req.hostname, req.originalUrl);
-    next();
+const logger = async (req, res, next) => {
+    // console.log(req.method, req.url)
+    next()
 }
 
 const verifyToken = async (req, res, next) => {
-    const token = req.cookies.token;
-    console.log('token in verify', token)
+    const token = req?.cookies?.token;
+    // console.log('Token in the middleware', token)
+
+    // No token Avaliable
+    if(!token) {
+        return res.status(401).send({messege: 'Unauthorized'})
+    }
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-        if(err) {
-            console.log(err)
-            res.status(401).send({messege: 'Not authorize'})
+        if(err) { 
+            return res.status(401).send({messege: 'Unauthorized Access'})
         }
-        console.log('Hoisee', decoded);
         req.user = decoded;
-        next();
+        next()
     })
-    
-} 
+}
 
-
+const cookieOption = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production' ? true : false,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict'
+}
 
 
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
 
         // Service Collection
         const servicesCollection = client.db('carDoctor').collection('services');
         const bookingCollection = client.db('carDoctor').collection('bookings');
 
         // Auth related Api
-        app.post('/jwt', looger,  async (req, res) => {
+        app.post('/jwt', logger, async (req, res) => {
             const user = req.body;
-            console.log(user)
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'} )
+            // console.log('user for token', user)
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1hr' });
 
-            res
-            res.cookie('token', token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production', 
-                sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
-
-            })
+            res.cookie('token', token, cookieOption)
             .send({success: true})
         })
 
+        app.post('/logout', async (req, res) => {
+            const user = req.user;
+            // console.log('Logout token user', user)
+            res.clearCookie('token', {...cookieOption, maxAge: 0 }).send({ success: true })
+        })
+
+
+
 
         // Service Related Api
-        // Data for Services Direct in Database (Find Multiply)
-        app.get('/services', looger,  async (req, res) => {
+        // Data for Services Direct in Database (Find Multiply)z
+        app.get('/services', logger, async (req, res) => {
             const cursor = servicesCollection.find()
             const result = await cursor.toArray()
             res.send(result)
@@ -115,12 +126,12 @@ async function run() {
         })
 
         // Get booking data
-        app.get('/bookings', looger, verifyToken, async (req, res) => {
-            // console.log('In MyList token is', req.cookies.token)
-            console.log('Value in varify', req.user);
+        app.get('/bookings', logger, verifyToken, async (req, res) => {
 
-            if(req.query.email !== req.user.email) {
-                return res.status(403).send({messege: 'forbidden Access'})
+
+            // console.log('Token owner Info', req.user)
+            if(req.user.email !== req.query.email){
+                return res.status(403).send({messege: 'Forbidden Access'})
             }
 
             let = query = {};
@@ -165,11 +176,11 @@ async function run() {
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({
-            ping: 1
-        });
+        // await client.db("admin").command({
+        //     ping: 1
+        // });
 
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
@@ -183,5 +194,52 @@ app.get('/', (req, res) => {
 })
 
 app.listen(port, () => {
-    console.log(`Car Doctor is Running on: ${port}`)
+    // console.log(`Car Doctor is Running on: ${port}`)
 })
+
+
+
+
+
+
+
+
+
+
+// Middlewares
+// const looger = async (req, res, next) => {
+//     console.log('called', req.hostname, req.originalUrl);
+//     next();
+// }
+
+// const verifyToken = async (req, res, next) => {
+//     const token = req.cookies.token;
+//     console.log('token in verify', token)
+//     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+//         if(err) {
+//             console.log(err)
+//             res.status(401).send({messege: 'Not authorize'})
+//         }
+//         console.log('Hoisee', decoded);
+//         req.user = decoded;
+//         next();
+//     })
+    
+// } 
+
+
+// Auth related Api
+        // app.post('/jwt', looger,  async (req, res) => {
+        //     const user = req.body;
+        //     console.log(user)
+        //     const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'} )
+
+        //     res
+        //     res.cookie('token', token, {
+        //         httpOnly: true,
+        //         secure: process.env.NODE_ENV === 'production', 
+        //         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+
+        //     })
+        //     .send({success: true})
+        // })
